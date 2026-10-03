@@ -128,8 +128,35 @@ impl ColliderShape {
                         + (pos_from_collider - head_global_pos).normalize() * bone_length;
                 }
             }
-            Self::Capsule(_) => {
-                //TODO: Not supported yet
+            Self::Capsule(capsule) => {
+                let offset = collider.transform_point(Vec3::from(capsule.offset));
+                let tail = collider.transform_point(Vec3::from(capsule.tail));
+                let direction = tail - offset;
+                let length_squared = direction.length_squared();
+                let center = if length_squared == 0.0 {
+                    offset
+                } else {
+                    let length = length_squared.sqrt();
+                    let axis = direction / length;
+                    let distance = axis.dot(head_global_pos - offset);
+                    if distance <= 0.0 {
+                        offset
+                    } else if distance >= length {
+                        tail
+                    } else {
+                        offset + axis * distance
+                    }
+                };
+
+                let r = joint_radius + capsule.radius * max_collider_scale;
+                let delta = *next_tail - center;
+                let distance_squared = delta.length_squared();
+                if distance_squared > 0.0 && distance_squared <= r * r {
+                    let dir = delta.normalize();
+                    let pos_from_collider = center + dir * r;
+                    *next_tail = head_global_pos
+                        + (pos_from_collider - head_global_pos).normalize() * bone_length;
+                }
             }
         }
     }
@@ -157,10 +184,13 @@ pub struct Sphere {
 #[reflect(Component, Serialize, Deserialize)]
 pub struct Capsule {
     /// Local coordinate of the center of the half sphere at the start point of the capsule
+    #[serde(default)]
     pub offset: [f32; 3],
     /// Radius of the half sphere and cylinder part of the capsule
+    #[serde(default)]
     pub radius: f32,
     /// Local coordinate of the center of the half sphere at the end point of the capsule
+    #[serde(default)]
     pub tail: [f32; 3],
 }
 
